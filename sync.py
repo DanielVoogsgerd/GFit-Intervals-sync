@@ -111,7 +111,7 @@ def add_account(args):
     print("Requesting access from Google Fit")
 
     token_path = USER_GOOGLE_FIT_TOKEN_PATH_FORMAT.format(username=args.username)
-    get_credentials(get_credentials(args.username, token_path))
+    get_credentials(args.username, token_path)
 
 
 def run(args):
