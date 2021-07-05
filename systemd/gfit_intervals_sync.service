@@ -1,0 +1,9 @@
+[Unit]
+Description=Sync between Google Fit and Intervals.icu
+After=network.target
+
+[Service]
+Type=oneshot
+# These should be changed to the directory where the repository is placed
+WorkingDirectory=/opt/GFit-Intervals-sync
+ExecStart=pipenv run /opt/GFit-Intervals-sync/sync.py run
