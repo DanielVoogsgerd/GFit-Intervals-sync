@@ -129,7 +129,12 @@ def run(args):
         user_info = user_config[user]
         user_id = user_info[USER_CONFIG_ATHLETE_ID_FIELD]
         api_key = user_info[USER_CONFIG_API_KEY_FIELD]
-        sync(user, user_id, api_key)
+
+        try:
+            sync(user, user_id, api_key)
+        except:
+            log.warning(f"Something went wrong for user: {user}, skipping")
+
 
 def sync(user, user_id, api_key):
     user_google_fit_token_path = USER_GOOGLE_FIT_TOKEN_PATH_FORMAT.format(username=user)
