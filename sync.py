@@ -151,8 +151,9 @@ def sync(user, user_id, api_key):
 
     # Sleep / Night HR
     missing_resting_hr_dates = set(date_from_iso_vec(data[data['restingHR'].isna()]['date']))
+    missing_average_hr_dates = set(date_from_iso_vec(data[data['avgSleepingHR'].isna()]['date']))
     missing_sleep_dates = set(date_from_iso_vec(data[data['sleepSecs'].isna()]['date']))
-    combined_sleep_hr = missing_sleep_dates | missing_resting_hr_dates | set((date.today(),))
+    combined_sleep_hr = missing_sleep_dates | missing_resting_hr_dates | missing_average_hr_dates | set((date.today(),))
 
     if len(combined_sleep_hr) > 0:
         sleep_sessions = gfit.get_sleep_sessions(min(combined_sleep_hr), max(combined_sleep_hr))
@@ -165,7 +166,8 @@ def sync(user, user_id, api_key):
 
             if sleep_session.date in missing_resting_hr_dates or sleep_session.date == date.today():
                 hr_values = gfit.get_hr_values(sleep_session.start_time, sleep_session.end_time)
-                data_to_update[sleep_session.date]['restingHR'] = int(np.round(np.mean(hr_values)))
+                data_to_update[sleep_session.date]['avgSleepingHR'] = int(np.round(np.mean(hr_values)))
+                data_to_update[sleep_session.date]['restingHR'] = int(min(hr_values))
 
     # Weight
     missing_weight_dates = set(date_from_iso_vec(data[data['weight'].isna()]['date']))
