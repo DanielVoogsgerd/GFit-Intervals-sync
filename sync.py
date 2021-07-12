@@ -24,6 +24,8 @@ from collections import defaultdict
 import os
 import sys
 
+from google_fit_api import GoogleFitAPI
+
 # Constants
 APPLICATION_NAME = "Fit_Intervals_Sync"
 
@@ -152,38 +154,26 @@ def sync(user, user_id, api_key):
 
     log.debug(f"Dates request from Google Fit API: {dates_to_string(combined_sleep_hr)}")
 
-    sleep_from = datetime.fromisoformat(f"{min(combined_sleep_hr)} 15:00:00") - timedelta(days=1)
-    sleep_to = datetime.fromisoformat(f"{max(combined_sleep_hr)} 15:00:00")
-
     creds = get_credentials(user, user_google_fit_token_path)
+    gfit = GoogleFitAPI(creds)
 
-    fitness_service = build("fitness", "v1", credentials=creds)
-
-    sleep_sessions = get_sleep_sessions(fitness_service, sleep_from, sleep_to)
+    sleep_sessions = gfit.get_sleep_sessions(min(combined_sleep_hr), max(combined_sleep_hr))
 
     log.info(f"Received {len(sleep_sessions)} from the Google API")
 
     for sleep_session in sleep_sessions:
-        start_time = datetime_from_millis(sleep_session["startTimeMillis"])
-        end_time = datetime_from_millis(sleep_session["endTimeMillis"])
+        if sleep_session.date in missing_sleep_dates or sleep_session.date == date.today():
+            data_to_update[sleep_session.date]['sleepSecs'] = sleep_session.asleep_duration.seconds
 
-        end_date = end_time.date()
+        if sleep_session.date in missing_resting_hr_dates or sleep_session.date == date.today():
+            hr_values = gfit.get_hr_values(sleep_session.start_time, sleep_session.end_time)
+            data_to_update[sleep_session.date]['restingHR'] = np.round(np.mean(hr_values))
 
-        if end_date in missing_sleep_dates or end_date == date.today():
-            data_to_update[end_date]['sleepSecs'] = (end_time - start_time).seconds
-
-        if end_date in missing_resting_hr_dates or end_date == date.today():
-            hr_values = find_hr_values(fitness_service, start_time, end_time)
-            data_to_update[end_date]['restingHR'] = np.round(np.mean(hr_values))
-
-    weight_from = datetime.fromisoformat(f"{min(missing_weight_dates)} 15:00:00") - timedelta(days=1)
-    weight_to = datetime.fromisoformat(f"{max(missing_weight_dates)} 15:00:00")
-
-    weight_values = find_daily_weight_values(fitness_service, weight_from, weight_to)
+    weight_values = gfit.get_daily_weight(min(missing_weight_dates), max(missing_weight_dates))
 
     for weight_date in missing_weight_dates:
         if weight_date in weight_values:
-            data_to_update[weight_date]['weight'] = weight_values[weight_date]
+            data_to_update[weight_date]['weight'] = weight_values[weight_date][0]
 
     for data_date, values in data_to_update.items():
         print(f"Updating wellness data for user: {user}, for date: {data_date}")
@@ -204,10 +194,6 @@ def parse_config(config_location):
 def dates_to_string(dates: Iterable):
     dates = (str(date) for date in dates)
     return ", ".join(dates)
-
-
-def datetime_from_millis(millis):
-    return datetime.fromtimestamp(int(millis) / 1e3)
 
 
 def get_credentials(user: str, token_path: str):
@@ -232,74 +218,6 @@ def get_credentials(user: str, token_path: str):
             token.write(creds.to_json())
 
     return creds
-
-
-def get_sleep_sessions(fitness_service, start_time, end_time):
-    sleep_sessions = (
-        fitness_service.users()
-        .sessions()
-        .list(
-            userId="me",
-            fields="session",
-            startTime=start_time.isoformat("T") + "Z",
-            endTime=end_time.isoformat("T") + "Z",
-        )
-        .execute()
-    )["session"]
-
-    return sleep_sessions
-
-
-def find_daily_weight_values(fitness_service, start_date: date, end_date):
-    start_time = datetime.combine(start_date, datetime.min.time())
-    end_time = datetime.combine(end_date, datetime.max.time())
-
-    weight_entries = (
-        fitness_service.users()
-        .dataSources()
-        .datasets()
-        .get(
-            userId="me",
-            dataSourceId=DATA_SOURCES["weight"],
-            datasetId=get_dataset(start_time, end_time),
-        )
-        .execute()
-    )["point"]
-
-    weight_per_date = defaultdict(list)
-
-    for entry in weight_entries:
-        entry_date = datetime.fromtimestamp(int(entry['startTimeNanos']) / 1e9).date()
-
-        for value in entry['value']:
-            weight_per_date[entry_date].append(value["fpVal"])
-
-    return {d: round(np.mean(weight_values), 1) for d, weight_values in weight_per_date.items()}
-
-
-def find_hr_values(fitness_service, start_time: datetime, end_time: datetime):
-    start_nanos = start_time.timestamp() * 1e9
-    end_nanos = end_time.timestamp() * 1e9
-
-    session_dataset = f"{start_nanos:.0f}-{end_nanos:.0f}"
-
-    session_entries = (
-        fitness_service.users()
-        .dataSources()
-        .datasets()
-        .get(
-            userId="me",
-            dataSourceId=DATA_SOURCES["heart_rate"],
-            datasetId=session_dataset,
-        )
-        .execute()
-    )["point"]
-
-    return [entry["value"][0]["fpVal"] for entry in session_entries]
-
-
-def get_dataset(start: datetime, end: datetime) -> str:
-    return f"{start.timestamp() * 1e9:.0f}-{end.timestamp() * 1e9:.0f}"
 
 
 def ensure_directory(directory_path):
