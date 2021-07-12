@@ -57,6 +57,9 @@ class SleepSegment:
     def duration(self):
         return self.end_time - self.start_time
 
+    def __str__(self):
+        return f"{self.start_time} - {self.end_time}: {self.sleep_type}"
+
 
 @dataclass
 class SleepSession:
@@ -110,6 +113,17 @@ class SleepSession:
     @property
     def date(self) -> date:
         return self.end_time.date()
+
+    def __str__(self):
+        output_buffer = []
+        output_buffer.append(f"Sleep session ({self.start_time}-{self.end_time}")
+        output_buffer.append(f"Time asleep: {self.asleep_duration}; Time awake: {self.awake_duration}")
+
+        output_buffer.append("Segments:")
+        for segment in self.sleep_segments:
+            output_buffer.append(f"\t{segment}")
+
+        return "\n".join(output_buffer)
 
 
 @dataclass
