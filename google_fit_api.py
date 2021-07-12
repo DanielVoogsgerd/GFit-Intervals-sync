@@ -93,10 +93,14 @@ class SleepSession:
 
     @property
     def asleep_duration(self):
-        return self.sleep_type_duration(ASLEEP_TYPES)
+        if len(self.sleep_segments) == 0:
+            return self.end_time - self.start_time
+        else:
+            return self.sleep_type_duration(ASLEEP_TYPES)
 
     @property
     def awake_duration(self):
+        # TODO: Raise an error when no sleep segments are loaded
         return self.sleep_type_duration((SleepType.Awake,))
 
     def sleep_type_duration(self, sleep_types: Sequence[SleepType]):
