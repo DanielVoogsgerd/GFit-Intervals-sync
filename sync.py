@@ -144,23 +144,15 @@ def sync(user, user_id, api_key):
 
     data = intervals_api.wellness_csv.get(oldest=date.today() - timedelta(days=DAYS_TO_COMPARE))
 
-    missing_weight_dates = set(date_from_iso_vec(data[data['weight'].isna()]['date']))
-    missing_resting_hr_dates = set(date_from_iso_vec(data[data['restingHR'].isna()]['date']))
-    missing_sleep_dates = set(date_from_iso_vec(data[data['sleepSecs'].isna()]['date']))
-
-    missing_systolic_dates = set(date_from_iso_vec(data[data['systolic'].isna()]['date']))
-    missing_diastolic_dates = set(date_from_iso_vec(data[data['diastolic'].isna()]['date']))
-
-    missing_blood_pressure_dates = missing_systolic_dates | missing_diastolic_dates
-
     data_to_update = defaultdict(dict)
-
-    combined_sleep_hr = missing_sleep_dates | missing_resting_hr_dates | set((date.today(),))
-
-    log.debug(f"Dates request from Google Fit API: {dates_to_string(combined_sleep_hr)}")
 
     creds = get_credentials(user, user_google_fit_token_path)
     gfit = GoogleFitAPI(creds)
+
+    # Sleep / Night HR
+    missing_resting_hr_dates = set(date_from_iso_vec(data[data['restingHR'].isna()]['date']))
+    missing_sleep_dates = set(date_from_iso_vec(data[data['sleepSecs'].isna()]['date']))
+    combined_sleep_hr = missing_sleep_dates | missing_resting_hr_dates | set((date.today(),))
 
     sleep_sessions = gfit.get_sleep_sessions(min(combined_sleep_hr), max(combined_sleep_hr))
 
@@ -174,11 +166,19 @@ def sync(user, user_id, api_key):
             hr_values = gfit.get_hr_values(sleep_session.start_time, sleep_session.end_time)
             data_to_update[sleep_session.date]['restingHR'] = np.round(np.mean(hr_values))
 
+    # Weight
+    missing_weight_dates = set(date_from_iso_vec(data[data['weight'].isna()]['date']))
+
     weight_values = gfit.get_daily_weight(min(missing_weight_dates), max(missing_weight_dates))
 
     for weight_date in missing_weight_dates:
         if weight_date in weight_values:
             data_to_update[weight_date]['weight'] = weight_values[weight_date][0]
+
+    # Blood pressure
+    missing_systolic_dates = set(date_from_iso_vec(data[data['systolic'].isna()]['date']))
+    missing_diastolic_dates = set(date_from_iso_vec(data[data['diastolic'].isna()]['date']))
+    missing_blood_pressure_dates = missing_systolic_dates | missing_diastolic_dates
 
     blood_pressure_by_date = gfit.get_daily_blood_pressure(min(missing_blood_pressure_dates), max(missing_blood_pressure_dates))
     for blood_pressure_date in missing_blood_pressure_dates:
