@@ -164,7 +164,7 @@ def sync(user, user_id, api_key):
 
         if sleep_session.date in missing_resting_hr_dates or sleep_session.date == date.today():
             hr_values = gfit.get_hr_values(sleep_session.start_time, sleep_session.end_time)
-            data_to_update[sleep_session.date]['restingHR'] = np.round(np.mean(hr_values))
+            data_to_update[sleep_session.date]['restingHR'] = int(np.round(np.mean(hr_values)))
 
     # Weight
     missing_weight_dates = set(date_from_iso_vec(data[data['weight'].isna()]['date']))
