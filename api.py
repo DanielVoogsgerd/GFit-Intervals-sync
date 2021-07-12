@@ -121,6 +121,19 @@ class CSVEndpoint(Endpoint):
         response_file = StringIO(response_content)
         return pd.read_csv(response_file)
 
+    def post_request_csv(self, url, data: pd.DataFrame, index_label):
+        r = requests.post(
+            url.format(athlete_id=self.athlete_id),
+            auth=self.auth,
+            files={
+                'file': ('wellness.csv', data.to_csv(index_label=index_label))
+            }
+        )
+
+        logging.debug(f"Sending POST request to {r.url}")
+
+        return r.text
+
 
 class CalendarEndpoint(Endpoint):
     endpoint_url = API_URL + "/api/v1/athlete/{athlete_id}/calendars"
@@ -231,6 +244,10 @@ class WellnessCSVEndpoint(CSVEndpoint):
             query_parameters=params,
         )
 
-    def update(self, dataframe):
+    def update(self, data: pd.DataFrame, index_label, **kwargs):
         """Update multiple wellness entries"""
-        raise NotImplementedError
+        return self.post_request_csv(
+            self.endpoint_url.format(**kwargs, athlete_id=self.athlete_id),
+            data=data,
+            index_label=index_label
+        )
