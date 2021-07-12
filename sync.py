@@ -45,7 +45,7 @@ GFIT_CREDENTIALS_PATH = os.path.join(CONFIG_DIR, "credentials.json")
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
     f"https://www.googleapis.com/auth/fitness.{scope}.read"
-    for scope in ["heart_rate", "sleep", "body"]
+    for scope in ["heart_rate", "sleep", "body", "blood_pressure"]
 ]
 
 DATA_SOURCES = {
@@ -148,6 +148,11 @@ def sync(user, user_id, api_key):
     missing_resting_hr_dates = set(date_from_iso_vec(data[data['restingHR'].isna()]['date']))
     missing_sleep_dates = set(date_from_iso_vec(data[data['sleepSecs'].isna()]['date']))
 
+    missing_systolic_dates = set(date_from_iso_vec(data[data['systolic'].isna()]['date']))
+    missing_diastolic_dates = set(date_from_iso_vec(data[data['diastolic'].isna()]['date']))
+
+    missing_blood_pressure_dates = missing_systolic_dates | missing_diastolic_dates
+
     data_to_update = defaultdict(dict)
 
     combined_sleep_hr = missing_sleep_dates | missing_resting_hr_dates | set((date.today(),))
@@ -174,6 +179,15 @@ def sync(user, user_id, api_key):
     for weight_date in missing_weight_dates:
         if weight_date in weight_values:
             data_to_update[weight_date]['weight'] = weight_values[weight_date][0]
+
+    blood_pressure_by_date = gfit.get_daily_blood_pressure(min(missing_blood_pressure_dates), max(missing_blood_pressure_dates))
+    for blood_pressure_date in missing_blood_pressure_dates:
+        if blood_pressure_date in blood_pressure_by_date:
+            blood_pressures = blood_pressure_by_date[blood_pressure_date]
+            blood_pressure = blood_pressures[0]
+            data_to_update[blood_pressure_date]['systolic'] = blood_pressure.systolic
+            data_to_update[blood_pressure_date]['diastolic'] = blood_pressure.diastolic
+
 
     for data_date, values in data_to_update.items():
         print(f"Updating wellness data for user: {user}, for date: {data_date}")
